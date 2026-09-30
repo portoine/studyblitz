@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StudyBlitz</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ── Top nav ────────────────────────────────────────────────────────────── -->
+<nav class="topnav">
+  <a href="/dashboard" class="nav-logo">⚡ StudyBlitz</a>
+  <div class="nav-links">
+    <button class="nav-btn" onclick="showView('dashboard')">My Sets</button>
+    <button class="nav-btn" onclick="showView('explore')">Explore</button>
+    <button class="nav-btn" onclick="showView('create')">+ Create</button>
+  </div>
+  <div class="nav-right">
+    <span class="streak" id="streak-badge"></span>
+    <span class="nav-user" id="nav-username"></span>
+    <button class="nav-btn btn-sm" onclick="logout()">Log out</button>
+  </div>
+</nav>
+
+<!-- ── Views ──────────────────────────────────────────────────────────────── -->
+<main id="app">
+
+  <!-- Dashboard -->
+  <section id="view-dashboard" class="view">
+    <h2>Your Study Sets</h2>
+    <div id="sets-list" class="sets-grid"></div>
+    <div id="no-sets" class="empty-state" style="display:none">
+      <p>You don't have any study sets yet.</p>
+      <button class="btn-primary" onclick="showView('create')">Create your first set</button>
+    </div>
+  </section>
+
+  <!-- Explore -->
+  <section id="view-explore" class="view" style="display:none">
+    <h2>Explore Public Sets</h2>
+    <div class="search-bar">
+      <input type="text" id="explore-search" placeholder="Search sets..." onkeyup="debounceExplore()">
+    </div>
+    <div id="explore-list" class="sets-grid"></div>
+  </section>
+
+  <!-- Create / Edit set -->
+  <section id="view-create" class="view" style="display:none">
+    <h2 id="create-heading">Create a New Set</h2>
+    <form id="set-form" onsubmit="saveSet(event)">
+      <input type="hidden" id="edit-set-id">
+      <input type="text" id="set-title" placeholder="Title (e.g. Biology Ch. 5)" required>
+      <input type="text" id="set-desc" placeholder="Description (optional)">
+      <div class="card-editor" id="card-editor">
+        <div class="card-row" data-idx="0">
+          <span class="card-num">1</span>
+          <input type="text" class="card-term" placeholder="Term" required>
+          <input type="text" class="card-def" placeholder="Definition" required>
+          <button type="button" class="btn-icon btn-remove-card" onclick="removeCardRow(this)" title="Remove">&times;</button>
+        </div>
+      </div>
+      <div class="card-editor-actions">
+        <button type="button" class="btn-secondary" onclick="addCardRow()">+ Add card</button>
+        <button type="button" class="btn-secondary" onclick="bulkImport()">Import from text</button>
+      </div>
+      <button type="submit" class="btn-primary">Save set</button>
+    </form>
+  </section>
+
+  <!-- Set detail -->
+  <section id="view-set" class="view" style="display:none">
+    <div class="set-header">
+      <div>
+        <h2 id="set-detail-title"></h2>
+        <p id="set-detail-desc" class="text-muted"></p>
+        <p id="set-detail-count" class="text-muted"></p>
+      </div>
+      <div class="set-actions">
+        <button class="btn-primary" onclick="startFlashcards()">Flashcards</button>
+        <button class="btn-primary" onclick="startLearn()">Learn</button>
+        <button class="btn-primary" onclick="startTest()">Test</button>
+        <button class="btn-primary" onclick="startMatch()">Match</button>
+        <button class="btn-secondary" onclick="editSet()">Edit</button>
+        <button class="btn-danger" onclick="deleteSet()">Delete</button>
+      </div>
+    </div>
+    <div id="set-progress-bar" class="mastery-bar"></div>
+    <div id="set-cards-preview" class="cards-preview"></div>
+    <div id="set-scores" class="scores-section"></div>
+  </section>
+
+  <!-- Flashcard mode -->
+  <section id="view-flashcards" class="view" style="display:none">
+    <div class="study-header">
+      <button class="btn-back" onclick="backToSet()">&larr; Back</button>
+      <span class="study-progress" id="fc-progress"></span>
+      <div class="study-controls">
+        <button class="btn-icon" onclick="fcShuffle()" title="Shuffle">&#x1F500;</button>
+        <label class="toggle-label"><input type="checkbox" id="fc-star-only" onchange="fcFilterStarred()"> Starred only</label>
+      </div>
+    </div>
+    <div class="flashcard-stage">
+      <div class="flashcard" id="flashcard" onclick="flipCard()">
+        <div class="flashcard-inner" id="flashcard-inner">
+          <div class="flashcard-front" id="fc-front"></div>
+          <div class="flashcard-back" id="fc-back"></div>
+        </div>
+      </div>
+      <div class="flashcard-hint">Click card to flip</div>
+    </div>
+    <div class="flashcard-nav">
+      <button class="btn-secondary" onclick="fcPrev()" id="fc-prev-btn">&larr; Previous</button>
+      <button class="btn-icon btn-star" id="fc-star-btn" onclick="fcToggleStar()" title="Star this card">&#9734;</button>
+      <button class="btn-secondary" onclick="fcNext()" id="fc-next-btn">Next &rarr;</button>
+    </div>
+    <div class="keyboard-hint">Use arrow keys or spacebar to navigate</div>
+  </section>
+
+  <!-- Learn mode -->
+  <section id="view-learn" class="view" style="display:none">
+    <div class="study-header">
+      <button class="btn-back" onclick="backToSet()">&larr; Back</button>
+      <span class="study-progress" id="learn-progress"></span>
+    </div>
+    <div class="learn-stage">
+      <div class="learn-prompt" id="learn-prompt"></div>
+      <div id="learn-choices" class="learn-choices"></div>
+      <div id="learn-write" class="learn-write" style="display:none">
+        <input type="text" id="learn-input" placeholder="Type the answer..." autocomplete="off">
+        <button class="btn-primary" onclick="learnSubmitWritten()">Submit</button>
+      </div>
+      <div id="learn-feedback" class="learn-feedback"></div>
+      <button id="learn-next-btn" class="btn-primary" style="display:none" onclick="learnNext()">Continue</button>
+    </div>
+    <div class="learn-summary" id="learn-summary" style="display:none">
+      <h3>Round Complete!</h3>
+      <div id="learn-summary-stats"></div>
+      <button class="btn-primary" onclick="startLearn()">Study again</button>
+      <button class="btn-secondary" onclick="backToSet()">Back to set</button>
+    </div>
+  </section>
+
+  <!-- Test mode -->
+  <section id="view-test" class="view" style="display:none">
+    <div class="study-header">
+      <button class="btn-back" onclick="backToSet()">&larr; Back</button>
+      <span id="test-timer" class="study-timer"></span>
+    </div>
+    <form id="test-form" onsubmit="submitTest(event)">
+      <div id="test-questions"></div>
+      <button type="submit" class="btn-primary btn-lg">Submit test</button>
+    </form>
+    <div id="test-results" style="display:none">
+      <h3 id="test-score-heading"></h3>
+      <div id="test-results-detail"></div>
+      <button class="btn-primary" onclick="startTest()">Retake</button>
+      <button class="btn-secondary" onclick="backToSet()">Back to set</button>
+    </div>
+  </section>
+
+  <!-- Match mode -->
+  <section id="view-match" class="view" style="display:none">
+    <div class="study-header">
+      <button class="btn-back" onclick="backToSet()">&larr; Back</button>
+      <span class="study-timer" id="match-timer">0.0s</span>
+      <span class="study-progress" id="match-progress"></span>
+    </div>
+    <div class="match-grid" id="match-grid"></div>
+    <div class="match-complete" id="match-complete" style="display:none">
+      <h3>Nice!</h3>
+      <p id="match-final-time"></p>
+      <button class="btn-primary" onclick="startMatch()">Play again</button>
+      <button class="btn-secondary" onclick="backToSet()">Back to set</button>
+    </div>
+  </section>
+
+  <!-- Bulk import modal -->
+  <div class="modal-overlay" id="import-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <h3>Import cards from text</h3>
+      <p class="text-muted">One card per line. Separate term and definition with a tab or semicolon.</p>
+      <textarea id="import-text" rows="10" placeholder="term1 ; definition1&#10;term2 ; definition2"></textarea>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">Cancel</button>
+        <button class="btn-primary" onclick="doBulkImport()">Import</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

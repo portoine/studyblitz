@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StudyBlitz — Sign Up</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-page">
+<div class="auth-container">
+  <div class="auth-logo">⚡ StudyBlitz</div>
+  <h1>Create your account</h1>
+  <form id="signup-form" autocomplete="on">
+    <input type="text" name="username" placeholder="Username" required autofocus minlength="2">
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Password (6+ characters)" required minlength="6">
+    <div class="auth-error" id="signup-error"></div>
+    <button type="submit" class="btn-primary">Create account</button>
+  </form>
+  <p class="auth-switch">Already have an account? <a href="/login">Log in</a></p>
+</div>
+<script>
+document.getElementById("signup-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch("/api/signup", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({username: fd.get("username"), email: fd.get("email"), password: fd.get("password")})
+  });
+  const d = await res.json();
+  if (d.ok) { location.href = "/dashboard"; }
+  else { document.getElementById("signup-error").textContent = d.error; }
+});
+</script>
+</body>
+</html>
