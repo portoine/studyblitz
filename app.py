@@ -494,7 +494,7 @@ def api_generate_cards():
         return jsonify(error="Paste at least a few sentences of notes."), 400
 
     msg = ai_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=4000,
         messages=[{"role": "user", "content": f"""You are a study assistant. Create exactly {num_cards} flashcards from these notes.
 Each flashcard should test one key concept, term, or fact.
@@ -545,7 +545,7 @@ def api_generate_summary():
         return jsonify(error="Paste at least a few sentences of notes."), 400
 
     msg = ai_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=3000,
         messages=[{"role": "user", "content": f"""Create a concise study guide from these notes. Format it with:
 - A brief overview (2-3 sentences)
@@ -579,7 +579,7 @@ def api_chat():
         api_messages.append({"role": m["role"], "content": m["content"]})
 
     msg = ai_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=2000,
         system=system_prompt,
         messages=api_messages,
@@ -597,7 +597,7 @@ def api_explain_card():
     definition = d.get("definition", "")
 
     msg = ai_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=1500,
         messages=[{"role": "user", "content": f"""Explain this concept in a way that helps a student deeply understand it:
 
