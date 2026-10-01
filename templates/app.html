@@ -14,6 +14,8 @@
     <button class="nav-btn" onclick="showView('dashboard')">My Sets</button>
     <button class="nav-btn" onclick="showView('explore')">Explore</button>
     <button class="nav-btn" onclick="showView('create')">+ Create</button>
+    <button class="nav-btn nav-btn-ai" onclick="showView('magic')">Magic Notes</button>
+    <button class="nav-btn nav-btn-ai" onclick="showView('chat')">AI Tutor</button>
   </div>
   <div class="nav-right">
     <span class="streak" id="streak-badge"></span>
@@ -80,6 +82,7 @@
         <button class="btn-primary" onclick="startLearn()">Learn</button>
         <button class="btn-primary" onclick="startTest()">Test</button>
         <button class="btn-primary" onclick="startMatch()">Match</button>
+        <button class="btn-secondary" onclick="askTutorAboutSet()">AI Tutor</button>
         <button class="btn-secondary" onclick="editSet()">Edit</button>
         <button class="btn-danger" onclick="deleteSet()">Delete</button>
       </div>
@@ -173,6 +176,73 @@
       <button class="btn-secondary" onclick="backToSet()">Back to set</button>
     </div>
   </section>
+
+  <!-- Magic Notes -->
+  <section id="view-magic" class="view" style="display:none">
+    <h2>Magic Notes</h2>
+    <p class="text-muted" style="margin-bottom:20px">Paste your class notes, textbook text, or any study material. AI will instantly generate flashcards and a study guide.</p>
+    <div class="magic-form">
+      <input type="text" id="magic-title" placeholder="Set title (e.g. Bio Ch. 5 — Cell Division)" class="magic-input">
+      <textarea id="magic-notes" rows="10" placeholder="Paste your notes here... (lecture notes, textbook excerpts, article text, etc.)"></textarea>
+      <div class="magic-options">
+        <label class="text-muted">Number of cards:
+          <select id="magic-num">
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20" selected>20</option>
+            <option value="30">30</option>
+            <option value="40">40</option>
+          </select>
+        </label>
+      </div>
+      <div class="magic-actions">
+        <button class="btn-primary" onclick="generateCards()" id="magic-cards-btn" style="width:auto">Generate Flashcards</button>
+        <button class="btn-secondary" onclick="generateSummary()" id="magic-summary-btn">Generate Study Guide</button>
+      </div>
+      <div id="magic-loading" class="magic-loading" style="display:none">
+        <div class="spinner"></div>
+        <span>AI is analyzing your notes...</span>
+      </div>
+      <div id="magic-result" style="display:none">
+        <div id="magic-summary-result" class="magic-summary-box" style="display:none"></div>
+        <div id="magic-cards-result"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Tutor / Chat -->
+  <section id="view-chat" class="view" style="display:none">
+    <h2>AI Tutor</h2>
+    <p class="text-muted" style="margin-bottom:20px">Ask anything — get explanations, solve problems, or quiz yourself with AI.</p>
+    <div class="chat-container">
+      <div class="chat-context-bar" id="chat-context-bar" style="display:none">
+        <span class="text-muted">Studying: </span><strong id="chat-context-title"></strong>
+        <button class="btn-sm btn-secondary" onclick="clearChatContext()">Clear</button>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-msg assistant">
+          <div class="chat-bubble">Hi! I'm your AI tutor. Ask me anything — I can explain concepts, help with homework, or quiz you on your study sets. What would you like help with?</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input type="text" id="chat-input" placeholder="Ask a question..." autocomplete="off">
+        <button class="btn-primary" onclick="sendChat()" id="chat-send-btn" style="width:auto">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Walkthrough overlay -->
+  <div id="walkthrough-overlay" class="walkthrough-overlay" style="display:none">
+    <div class="walkthrough-card">
+      <div class="walkthrough-step-indicator" id="wt-dots"></div>
+      <h3 id="wt-title"></h3>
+      <p id="wt-desc"></p>
+      <div class="walkthrough-actions">
+        <button class="btn-secondary btn-sm" id="wt-skip" onclick="endWalkthrough()">Skip</button>
+        <button class="btn-primary" id="wt-next" onclick="nextWalkthroughStep()" style="width:auto">Next</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Bulk import modal -->
   <div class="modal-overlay" id="import-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">

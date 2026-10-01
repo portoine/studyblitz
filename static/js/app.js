@@ -56,6 +56,7 @@ function shuffle(arr) {
       else showSetDetail(currentSetId);
     } else {
       showView("dashboard");
+      checkFirstVisit();
     }
   } catch {
     location.href = "/login";
@@ -259,6 +260,7 @@ async function showSetDetail(id) {
     <div class="card-preview-row">
       <div class="card-preview-term">${esc(c.term)}</div>
       <div class="card-preview-def">${esc(c.definition)}</div>
+      <button class="btn-explain" onclick="explainCard('${esc(c.term).replace(/'/g,"\\'")}','${esc(c.definition).replace(/'/g,"\\'")}',this)">Explain</button>
     </div>`).join("") + (s.cards.length > 20 ? `<p class="text-muted">...and ${s.cards.length - 20} more</p>` : "");
 
   // scores
@@ -643,6 +645,229 @@ function levenshtein(a, b) {
     for (let j = 1; j <= n; j++)
       dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
   return dp[m][n];
+}
+
+// ── Magic Notes ──────────────────────────────────────────────────────────────
+
+async function generateCards() {
+  const notes = document.getElementById("magic-notes").value.trim();
+  const title = document.getElementById("magic-title").value.trim();
+  const num = document.getElementById("magic-num").value;
+  if (!notes || notes.length < 20) return alert("Paste at least a few sentences of notes.");
+  if (!title) return alert("Enter a title for your set.");
+
+  document.getElementById("magic-loading").style.display = "flex";
+  document.getElementById("magic-result").style.display = "none";
+  document.getElementById("magic-cards-btn").disabled = true;
+
+  try {
+    const res = await api("/api/generate-cards", {
+      method: "POST",
+      body: { notes, title, num_cards: parseInt(num) }
+    });
+    if (res.id) {
+      showSetDetail(res.id);
+    } else {
+      document.getElementById("magic-result").style.display = "block";
+      document.getElementById("magic-cards-result").innerHTML = `
+        <h3 style="margin-bottom:12px">${res.cards.length} cards generated</h3>` +
+        res.cards.map(c => `
+          <div class="card-preview-row">
+            <div class="card-preview-term">${esc(c.term)}</div>
+            <div class="card-preview-def">${esc(c.definition)}</div>
+          </div>`).join("");
+    }
+  } catch (e) {
+    alert(e.message || "Failed to generate cards. Try again.");
+  } finally {
+    document.getElementById("magic-loading").style.display = "none";
+    document.getElementById("magic-cards-btn").disabled = false;
+  }
+}
+
+async function generateSummary() {
+  const notes = document.getElementById("magic-notes").value.trim();
+  if (!notes || notes.length < 20) return alert("Paste at least a few sentences of notes.");
+
+  document.getElementById("magic-loading").style.display = "flex";
+  document.getElementById("magic-result").style.display = "none";
+  document.getElementById("magic-summary-btn").disabled = true;
+
+  try {
+    const res = await api("/api/generate-summary", {
+      method: "POST",
+      body: { notes }
+    });
+    document.getElementById("magic-result").style.display = "block";
+    const box = document.getElementById("magic-summary-result");
+    box.style.display = "block";
+    box.innerHTML = markdownToHtml(res.summary);
+  } catch (e) {
+    alert(e.message || "Failed to generate summary. Try again.");
+  } finally {
+    document.getElementById("magic-loading").style.display = "none";
+    document.getElementById("magic-summary-btn").disabled = false;
+  }
+}
+
+function markdownToHtml(md) {
+  return md
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
+
+// ── AI Tutor Chat ────────────────────────────────────────────────────────────
+
+let chatMessages = [];
+let chatContext = "";
+
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+
+  chatMessages.push({ role: "user", content: text });
+  appendChatBubble("user", text);
+
+  // show typing indicator
+  const typingEl = appendChatBubble("assistant", "");
+  typingEl.querySelector(".chat-bubble").innerHTML = '<span class="typing-dots"></span>';
+
+  try {
+    const res = await api("/api/chat", {
+      method: "POST",
+      body: { messages: chatMessages, context: chatContext }
+    });
+    chatMessages.push({ role: "assistant", content: res.reply });
+    typingEl.querySelector(".chat-bubble").textContent = res.reply;
+  } catch (e) {
+    typingEl.querySelector(".chat-bubble").textContent = "Sorry, I couldn't respond. Check that AI features are configured.";
+  }
+  scrollChat();
+}
+
+function appendChatBubble(role, text) {
+  const el = document.createElement("div");
+  el.className = `chat-msg ${role}`;
+  el.innerHTML = `<div class="chat-bubble">${esc(text)}</div>`;
+  document.getElementById("chat-messages").appendChild(el);
+  scrollChat();
+  return el;
+}
+
+function scrollChat() {
+  const c = document.getElementById("chat-messages");
+  c.scrollTop = c.scrollHeight;
+}
+
+function setChatContext(setData) {
+  if (!setData) return;
+  chatContext = `Title: ${setData.title}\nCards:\n` +
+    setData.cards.map(c => `- ${c.term}: ${c.definition}`).join("\n");
+  document.getElementById("chat-context-bar").style.display = "flex";
+  document.getElementById("chat-context-title").textContent = setData.title;
+}
+
+function askTutorAboutSet() {
+  setChatContext(currentSetData);
+  showView("chat");
+}
+
+function clearChatContext() {
+  chatContext = "";
+  document.getElementById("chat-context-bar").style.display = "none";
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && document.getElementById("chat-input") === document.activeElement) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+// ── Card Explain ─────────────────────────────────────────────────────────────
+
+async function explainCard(term, definition, btn) {
+  btn.disabled = true;
+  btn.textContent = "Loading...";
+  try {
+    const res = await api("/api/explain-card", {
+      method: "POST",
+      body: { term, definition }
+    });
+    const row = btn.closest(".card-preview-row");
+    let existing = row.nextElementSibling;
+    if (existing && existing.classList.contains("card-explanation")) existing.remove();
+    const div = document.createElement("div");
+    div.className = "card-explanation";
+    div.textContent = res.explanation;
+    row.after(div);
+  } catch (e) {
+    alert("Could not explain card. Check AI configuration.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Explain";
+  }
+}
+
+// ── Walkthrough ──────────────────────────────────────────────────────────────
+
+const WALKTHROUGH_STEPS = [
+  { title: "Welcome to StudyBlitz!", desc: "Let's take a quick tour of everything you can do. This will only take a moment." },
+  { title: "Create Study Sets", desc: "Click '+ Create' to build flashcard sets. Type terms and definitions, or bulk import from your notes using tab or semicolon-separated text." },
+  { title: "Magic Notes (AI)", desc: "Paste your class notes, textbook text, or lecture content into Magic Notes. AI will instantly generate flashcards and study guides for you." },
+  { title: "Study Modes", desc: "Open any set to study with 4 modes:\n\n- Flashcards — flip through cards, star favorites\n- Learn — multiple choice + typed answers\n- Test — full timed quiz\n- Match — pair terms with definitions" },
+  { title: "Spaced Repetition", desc: "StudyBlitz tracks what you know and what you don't. Cards you get wrong come back sooner. Cards you master get spaced out. The progress bar shows your mastery." },
+  { title: "AI Tutor", desc: "Click 'AI Tutor' anytime to chat with an AI study assistant. Ask it to explain concepts, help with homework, or quiz you on any topic." },
+  { title: "Explore", desc: "Browse public sets created by other users. Find a set you like? One click to copy it to your library." },
+  { title: "You're all set!", desc: "Start by creating your first set or pasting notes into Magic Notes. Happy studying!" },
+];
+
+let wtStep = 0;
+
+function startWalkthrough() {
+  wtStep = 0;
+  renderWalkthroughStep();
+  document.getElementById("walkthrough-overlay").style.display = "flex";
+  localStorage.setItem("sb_walkthrough_done", "1");
+}
+
+function renderWalkthroughStep() {
+  const s = WALKTHROUGH_STEPS[wtStep];
+  document.getElementById("wt-title").textContent = s.title;
+  document.getElementById("wt-desc").textContent = s.desc;
+  document.getElementById("wt-dots").innerHTML = WALKTHROUGH_STEPS.map((_, i) =>
+    `<span class="dot ${i === wtStep ? 'active' : ''}"></span>`).join("");
+  document.getElementById("wt-next").textContent = wtStep === WALKTHROUGH_STEPS.length - 1 ? "Get started" : "Next";
+}
+
+function nextWalkthroughStep() {
+  wtStep++;
+  if (wtStep >= WALKTHROUGH_STEPS.length) {
+    endWalkthrough();
+  } else {
+    renderWalkthroughStep();
+  }
+}
+
+function endWalkthrough() {
+  document.getElementById("walkthrough-overlay").style.display = "none";
+}
+
+function checkFirstVisit() {
+  if (!localStorage.getItem("sb_walkthrough_done")) {
+    setTimeout(startWalkthrough, 500);
+  }
 }
 
 async function logout() {

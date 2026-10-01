@@ -16,9 +16,16 @@ from flask import (
     session, redirect, url_for, g, abort
 )
 from werkzeug.security import generate_password_hash, check_password_hash
+import anthropic
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(32).hex())
+
+# Claude AI client
+ai_client = None
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+if ANTHROPIC_API_KEY:
+    ai_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 DB_PATH = Path(__file__).parent / "studyblitz.db"
 
@@ -461,6 +468,151 @@ def api_copy_set(sid):
         )
     db.commit()
     return jsonify(ok=True, id=new_id)
+
+
+# ── AI Features ───────────────────────────────────────────────────────────────
+
+def require_ai(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not ai_client:
+            return jsonify(error="AI features not configured. Set ANTHROPIC_API_KEY."), 503
+        return f(*args, **kwargs)
+    return wrapped
+
+
+@app.route("/api/generate-cards", methods=["POST"])
+@login_required
+@require_ai
+def api_generate_cards():
+    """Magic Notes: paste notes/text and AI generates flashcards."""
+    d = request.get_json(force=True)
+    notes = (d.get("notes") or "").strip()
+    title = (d.get("title") or "").strip()
+    num_cards = min(int(d.get("num_cards", 20)), 50)
+    if not notes or len(notes) < 20:
+        return jsonify(error="Paste at least a few sentences of notes."), 400
+
+    msg = ai_client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": f"""You are a study assistant. Create exactly {num_cards} flashcards from these notes.
+Each flashcard should test one key concept, term, or fact.
+
+Return ONLY a JSON array of objects with "term" and "definition" keys. No other text.
+Keep terms concise (1-8 words). Keep definitions clear and complete but brief (1-2 sentences).
+
+Notes:
+{notes}"""}],
+    )
+    try:
+        text = msg.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        cards = json.loads(text)
+        if not isinstance(cards, list):
+            raise ValueError("Not a list")
+    except Exception:
+        return jsonify(error="AI returned invalid format. Try again."), 500
+
+    # auto-create the set if title provided
+    if title:
+        db = get_db()
+        sid = uuid.uuid4().hex[:12]
+        db.execute(
+            "INSERT INTO sets(id,user_id,title,description) VALUES(?,?,?,?)",
+            (sid, session["user_id"], title, "Generated from notes with AI"),
+        )
+        for i, c in enumerate(cards):
+            db.execute(
+                "INSERT INTO cards(id,set_id,term,definition,position) VALUES(?,?,?,?,?)",
+                (uuid.uuid4().hex[:12], sid, c["term"], c["definition"], i),
+            )
+        db.commit()
+        return jsonify(ok=True, id=sid, cards=cards)
+
+    return jsonify(ok=True, cards=cards)
+
+
+@app.route("/api/generate-summary", methods=["POST"])
+@login_required
+@require_ai
+def api_generate_summary():
+    """Generate a study guide summary from notes."""
+    d = request.get_json(force=True)
+    notes = (d.get("notes") or "").strip()
+    if not notes or len(notes) < 20:
+        return jsonify(error="Paste at least a few sentences of notes."), 400
+
+    msg = ai_client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=3000,
+        messages=[{"role": "user", "content": f"""Create a concise study guide from these notes. Format it with:
+- A brief overview (2-3 sentences)
+- Key concepts as bullet points with bold terms
+- Important relationships or connections between concepts
+- Quick-review questions at the end (3-5 questions)
+
+Use markdown formatting. Be thorough but concise.
+
+Notes:
+{notes}"""}],
+    )
+    return jsonify(ok=True, summary=msg.content[0].text)
+
+
+@app.route("/api/chat", methods=["POST"])
+@login_required
+@require_ai
+def api_chat():
+    """AI homework help / Q-Chat: ask questions, get explanations."""
+    d = request.get_json(force=True)
+    messages = d.get("messages", [])
+    context = d.get("context", "")
+
+    system_prompt = "You are StudyBlitz AI, a friendly and knowledgeable study tutor. Help students understand concepts, solve problems, and learn effectively. Give clear, step-by-step explanations. Use examples when helpful. If a student is wrong, gently guide them to the right answer rather than just giving it away."
+    if context:
+        system_prompt += f"\n\nThe student is currently studying this set:\n{context}"
+
+    api_messages = []
+    for m in messages[-20:]:  # keep last 20 messages
+        api_messages.append({"role": m["role"], "content": m["content"]})
+
+    msg = ai_client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=2000,
+        system=system_prompt,
+        messages=api_messages,
+    )
+    return jsonify(ok=True, reply=msg.content[0].text)
+
+
+@app.route("/api/explain-card", methods=["POST"])
+@login_required
+@require_ai
+def api_explain_card():
+    """Get a detailed explanation of a flashcard term."""
+    d = request.get_json(force=True)
+    term = d.get("term", "")
+    definition = d.get("definition", "")
+
+    msg = ai_client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1500,
+        messages=[{"role": "user", "content": f"""Explain this concept in a way that helps a student deeply understand it:
+
+Term: {term}
+Definition: {definition}
+
+Provide:
+1. A simple explanation in everyday language
+2. An example or analogy
+3. Why it matters / how it connects to related concepts
+4. A memory trick or mnemonic if applicable
+
+Keep it concise but thorough."""}],
+    )
+    return jsonify(ok=True, explanation=msg.content[0].text)
 
 
 if __name__ == "__main__":
