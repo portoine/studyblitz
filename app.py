@@ -18,6 +18,15 @@ from flask import (
 from werkzeug.security import generate_password_hash, check_password_hash
 import anthropic
 
+# Load .env file if present
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    for line in _env_path.read_text().strip().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(32).hex())
 
