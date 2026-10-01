@@ -810,7 +810,9 @@ async function explainCard(term, definition, btn) {
     if (existing && existing.classList.contains("card-explanation")) existing.remove();
     const div = document.createElement("div");
     div.className = "card-explanation";
-    div.textContent = res.explanation;
+    div.innerHTML = `<button class="btn-collapse" onclick="this.parentElement.remove()">Collapse</button>` +
+      `<div style="white-space:pre-wrap">${esc(res.explanation)}</div>` +
+      `<button class="btn-collapse" onclick="this.parentElement.remove()">Collapse</button>`;
     row.after(div);
   } catch (e) {
     alert("Could not explain card. Check AI configuration.");

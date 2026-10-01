@@ -226,7 +226,10 @@ h1,h2,h3 { font-weight: 700; }
 /* ── Explain button on cards ─────────────────────────────────────────────── */
 .btn-explain { background: none; border: 1px solid var(--accent); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
 .btn-explain:hover { background: rgba(139,92,246,0.12); }
-.card-explanation { background: var(--bg-card); border: 1px solid var(--accent); border-radius: 8px; padding: 16px; margin-top: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.card-explanation { background: var(--bg-card); border: 1px solid var(--accent); border-radius: 8px; padding: 16px; margin-top: 8px; font-size: 13px; line-height: 1.6; }
+.btn-collapse { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-bottom: 8px; }
+.btn-collapse:hover { background: var(--bg-card-hover); color: var(--text); }
+.btn-collapse:last-child { margin-top: 10px; margin-bottom: 0; }
 
 /* ── Walkthrough ──────────────────────────────────────────────────────────── */
 .walkthrough-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 20px; }
